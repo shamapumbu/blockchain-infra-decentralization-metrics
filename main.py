@@ -13,43 +13,37 @@
 # limitations under the License.
 ############################################
 import sys
-
-from classes.obj_constructor import MakeCountryObjects, MakeProviderObjects, MakeTargetBlockchainObject
-from utilities.usage import PrintCountryCompletion, PrintProviderCompletion, PrintUsage
 from utilities.setup import GetArguments
-from analysis.analysis import GetNetworkProviderDistribution
+from utilities.plugin_manager import PluginManager
+from utilities.usage import PrintCountryCompletion, PrintProviderCompletion, PrintUsage
 
-## Main ##
 def main(target_blockchain, providers_to_track, countries_to_track, output):
     print("\n-----RUNTIME-----")
-    
-    #Make target blockchain and provider objects if providers_to_track not empty
-    blockchain_obj = MakeTargetBlockchainObject(target_blockchain)
-    providers_short_to_object_map = {}
-    countries_short_to_object_map = {}
-    if providers_to_track:
-        providers_short_to_object_map = MakeProviderObjects(providers_to_track, blockchain_obj)
-    if countries_to_track:
-        countries_short_to_object_map = MakeCountryObjects(countries_to_track, blockchain_obj)
 
-    #Analyze all nodes for provided blockchain (overwrites if flow)
-    blockchain_obj = GetNetworkProviderDistribution(providers_to_track, countries_to_track, providers_short_to_object_map, countries_short_to_object_map, blockchain_obj)
+    # Initialize the PluginManager and load plugins
+    plugin_manager = PluginManager()
+    plugin_manager.load_plugins()
 
-    #Output JSON for trackable providers and countries
-    print("\n\nOutputting information to JSON files...")
-    for obj in providers_short_to_object_map.values():
-        obj.OutputJSONInfo(blockchain_obj)
-    for obj in countries_short_to_object_map.values():
-        obj.OutputJSONInfo(blockchain_obj)
-    blockchain_obj.SaveProviderDistribution()
-    print("Done.", flush=True)
+    # Get the specific plugin and create an instance
+    BlockchainPlugin = plugin_manager.get_plugin(target_blockchain)
+    if BlockchainPlugin:
+        blockchain_obj = BlockchainPlugin(providers_to_track, countries_to_track)
 
-    #Output results flag passed
-    if output:
-        PrintProviderCompletion(providers_short_to_object_map, target_blockchain)
-        PrintCountryCompletion(countries_short_to_object_map, target_blockchain, blockchain_obj)
+        # Analyze all nodes for the provided blockchain (overwrites if flow)
+        blockchain_obj = blockchain_obj.get_network_provider_distribution()
 
-## Main Caller ##
+        # Output JSON for trackable providers and countries
+        print("\n\nOutputting information to JSON files...")
+        blockchain_obj.output_json_info()
+        print("Done.", flush=True)
+
+        # Output results flag passed
+        if output:
+            PrintProviderCompletion(blockchain_obj.providers_short_to_object_map, target_blockchain)
+            PrintCountryCompletion(blockchain_obj.countries_short_to_object_map, target_blockchain, blockchain_obj)
+    else:
+        print(f"Error: The plugin for {target_blockchain} was not found. Please ensure it is correctly installed in the 'plugins' folder.")
+
 if __name__ == "__main__":
     if len(sys.argv) > 6:
         print("ERROR: Too many parameters.\n")
